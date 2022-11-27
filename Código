@@ -1,0 +1,45 @@
+Adafruit_ADS1115 ads1115; // construct an ads1115 at address 0x48
+#define power_pin 5 //pin para alimentar el sensor de salinidad
+const int AirValue =30200 ;  // Medimos valor en seco
+const int WaterValue =17700 ;  // Medimos valor en agua
+ 
+void setup() { 
+  
+  Serial.begin(9600);
+  pinMode(power_pin,OUTPUT );
+  Serial.println("Inicializando...");
+  ads1115.begin(); //Initialize ads1115
+  Serial.println("Ajustando la ganancia...");
+  ads1115.setGain(GAIN_ONE);
+  Serial.println("Tomando medidas del canal AIN0 y AIN1"); 
+  Serial.println("Rango del ADC: +/- 4.096V (1 bit=2mV)");
+ 
+}
+ 
+void loop() {
+ 
+  int16_t adc0;
+  int16_t adc1;
+  int16_t humedad;
+  adc0 = ads1115.readADC_SingleEnded(0);
+  adc1 = analogRead(A1);
+  humedad = 100*AirValue/(AirValue-WaterValue)-adc0*100/(AirValue-WaterValue);
+ 
+  Serial.print("Porcentaje de humedad: ");
+  Serial.print(humedad);
+  Serial.println("%");
+  Serial.println("");
+  Serial.println("---------------------------------");
+  Serial.println("");
+  digitalWrite(power_pin,HIGH);
+  delay(100);
+  digitalWrite(power_pin, LOW);
+  delay(100);
+  Serial.print("Lectura digital de salinidad: ");
+  Serial.println(adc1,DEC);
+  Serial.println("");
+  Serial.println("---------------------------------");
+  Serial.println("");
+  delay(100);
+ 
+}
