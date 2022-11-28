@@ -1,14 +1,22 @@
+#include <Wire.h>
+#include <Adafruit_ADS1X15.h>
+
 Adafruit_ADS1115 ads1115; // construct an ads1115 at address 0x48
 #define power_pin 5 //pin para alimentar el sensor de salinidad
-const int AirValue =30200 ;  // Medimos valor en seco
-const int WaterValue =17700 ;  // Medimos valor en agua
+#define channelValue 0
+const int AirValue =30270 ;  // Medimos valor en seco
+const int WaterValue =18624 ;  // Medimos valor en agua
  
 void setup() { 
   
   Serial.begin(9600);
+ 
   pinMode(power_pin,OUTPUT );
+  Serial.println("Ajustando la ganancia...");
+  ads1115.setGain(GAIN_ONE);
   Serial.println("Inicializando...");
-  ads1115.begin(); //Initialize ads1115
+  ads1115.begin(0x48); //Initialize ads1115
+  Serial.println("Inicializando el medidor de Temperatura");
   Serial.println("Ajustando la ganancia...");
   ads1115.setGain(GAIN_ONE);
   Serial.println("Tomando medidas del canal AIN0 y AIN1"); 
@@ -17,29 +25,43 @@ void setup() {
 }
  
 void loop() {
- 
+  int16_t digitals, digitalt;
   int16_t adc0;
   int16_t adc1;
+  int16_t adc2;
   int16_t humedad;
+  int16_t averageSample;
+  float temperatura=adc0;
   adc0 = ads1115.readADC_SingleEnded(0);
-  adc1 = analogRead(A1);
+  adc1= analogRead(A0);  
+  adc2=ads1115.readADC_SingleEnded(1);
+  
   humedad = 100*AirValue/(AirValue-WaterValue)-adc0*100/(AirValue-WaterValue);
  
-  Serial.print("Porcentaje de humedad: ");
+  Serial.print("Medida de humedad: ");
   Serial.print(humedad);
   Serial.println("%");
-  Serial.println("");
   Serial.println("---------------------------------");
   Serial.println("");
+  
   digitalWrite(power_pin,HIGH);
   delay(100);
   digitalWrite(power_pin, LOW);
+  
   delay(100);
-  Serial.print("Lectura digital de salinidad: ");
-  Serial.println(adc1,DEC);
-  Serial.println("");
+  digitals = map(adc1,12,0,0,100);
+  Serial.print("Lectura de salinidad: ");
+  if (abs(digitals)<30){
+    digitals=0;
+  }
+  Serial.println(digitals,DEC);
+  Serial.println("%");
   Serial.println("---------------------------------");
   Serial.println("");
   delay(100);
- 
+
+ digitalt=map(adc2,12700,15862,22,32);
+ Serial.println(digitalt);
+ Serial.println(adc2);
+ delay (1000);
 }
