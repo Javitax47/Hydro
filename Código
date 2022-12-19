@@ -1,5 +1,5 @@
-
 #include <ESP8266WiFi.h>
+#include <cmath>
 
 ///////////////////////////////////////////////////////
 ////////////// Definiciones de Sensores //////////////
@@ -19,11 +19,13 @@ int16_t averageSample;
 float temperatura=adc0;
 const int AirValue =30304;  // Medimos valor en seco
 const int WaterValue =15300;  // Medimos valor en agua
+int x_values[] = { 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5 }; //Gramos de sal
+int y_values[] = { 3, 3, 3, 6, 6, 6, 11, 11, 11, 18, 18, 18, 27, 27, 27 }; //Valor medido
  
 
 // Comentar/Descomentar para ver mensajes de depuracion en monitor serie y/o respuesta del HTTP server
-//#define PRINT_DEBUG_MESSAGES
-//#define PRINT_HTTP_RESPONSE
+#define PRINT_DEBUG_MESSAGES
+#define PRINT_HTTP_RESPONSE
 
 // Comentar/Descomentar para conexion Fuera/Dentro de UPV
 #define WiFi_CONNECTION_UPV
@@ -69,10 +71,10 @@ WiFiClient client;
 
 #ifdef REST_SERVER_THINGSPEAK 
   const char Rest_Host[] = "api.thingspeak.com";
-  String MyWriteAPIKey="9OS5XBXFJV283GRD"; // Escribe la clave de tu canal ThingSpeak
+  String MyWriteAPIKey="FMOCSZVHU38UK5S5"; // Escribe la clave de tu canal ThingSpeak
 #else 
   const char Rest_Host[] = "dweet.io";
-  String MyWriteAPIKey="PruebaGTI"; // Escribe la clave de tu canal Dweet
+  String MyWriteAPIKey="cdiocurso2018g21"; // Escribe la clave de tu canal Dweet
 #endif
 
 #define NUM_FIELDS_TO_SEND 5 //Numero de medidas a enviar al servidor REST (Entre 1 y 8)
@@ -260,13 +262,42 @@ int sensor_luz(){
   Serial.println("");
   delay(100);
 
-  return alto;
+  return alto+bajo;
+}
+
+// Function to compute the Lagrange polynomial for a given set of data points
+// and a specific value of x
+double lagrange_polynomial(const int* x_values,const int* y_values,int n,int x){
+  double result = 0;
+
+  // Compute the Lagrange polynomial using the formula:
+  // L(x) = sum(y[i] * l[i](x))
+  // where l[i](x) is the ith Lagrange basis polynomial
+  for (int i = 0; i < n; i++)
+  {
+    double l = 1;
+
+    // Compute the ith Lagrange basis polynomial
+    for (int j = 0; j < n; j++)
+    {
+        if (j != i)
+        {
+            l *= (x - x_values[j]) / (x_values[i] - x_values[j]);
+        }
+    }
+
+    result += y_values[i] * l;
+  }
+
+  return result;
 }
 
 int sensor_salinidad(){
+  int n = 5;
   adc1 = analogRead(A0);  
+  int x = adc1;
   digitalWrite(power_pin, HIGH);
-  int sal = map(adc1,12,0,0,100);
+  int sal = lagrange_polynomial(x_values, y_values, n, x);
   delay(100);
   digitalWrite(power_pin, LOW);
   delay(100);
@@ -276,7 +307,7 @@ int sensor_salinidad(){
   Serial.println("");
   Serial.println("---------------------------------");
   Serial.println("");
-
+  
   return sal;
 }
 
@@ -286,7 +317,7 @@ int sensor_salinidad(){
 
 int condiciones(){
   int humedad_maíz = 66;
-  int iluminación_maíz = 46;
+  int iluminación_maíz = 80;
   int temperatura_maíz = 31;
   int salinidad_maíz = 4;
   int ph_maíz = 6;
@@ -295,7 +326,7 @@ int condiciones(){
   if (condiciones < 50){
     prosperidad = -condiciones + 100;
   }
-  Serial.println("Porcentaje de optimización para una cosecha de MAIZ.");
+  Serial.println("Porcentaje de optimizacion para una cosecha de MAIZ.");
   Serial.println("Este porcentaje recoge la informacion del ambiente en el que se encuentra la planta y refleja que tan bueno es.");
   Serial.print("Prosperidad: ");
   Serial.print(prosperidad);
@@ -381,7 +412,7 @@ void loop() {
   HTTPGet( data, NUM_FIELDS_TO_SEND );
 
   //Selecciona si quieres un retardo de 15seg para hacer pruebas o dormir el SparkFun
-  delay( 15000 );   
+  delay( 5000 );   
   //Serial.print( "Goodnight" );
   //ESP.deepSleep( sleepTimeSeconds * 1000000 );
    
