@@ -1,3 +1,5 @@
+#include <Adafruit_ADS1X15.h>
+
 #include <ESP8266WiFi.h>
 #include <cmath>
 
@@ -8,7 +10,7 @@
 #include <Wire.h>
 #include <Adafruit_ADS1X15.h>
 Adafruit_ADS1115 ads1115; // construct an ads1115 at address 0x48
-#define power_pin 5 //pin para alimentar el sensor de salinidad
+#define power_pin 0 //pin para alimentar el sensor de salinidad
 #define channelValue 0
 int16_t digitals, digitalt;
 int16_t adc0;
@@ -16,23 +18,22 @@ int16_t adc1;
 int16_t adc2;
 int16_t adc3;
 int16_t averageSample;
-float temperatura=adc0;
 const int AirValue =30304;  // Medimos valor en seco
 const int WaterValue =15300;  // Medimos valor en agua
-int x_values[] = { 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5 }; //Gramos de sal
-int y_values[] = { 3, 3, 3, 6, 6, 6, 11, 11, 11, 18, 18, 18, 27, 27, 27 }; //Valor medido
+const int WaterSal =10110;  // Medimos valor en seco
+const int ConSal =20160;
  
 
 // Comentar/Descomentar para ver mensajes de depuracion en monitor serie y/o respuesta del HTTP server
-#define PRINT_DEBUG_MESSAGES
-#define PRINT_HTTP_RESPONSE
+//#define PRINT_DEBUG_MESSAGES
+//#define PRINT_HTTP_RESPONSE
 
 // Comentar/Descomentar para conexion Fuera/Dentro de UPV
-#define WiFi_CONNECTION_UPV
+//#define WiFi_CONNECTION_UPV
 
 // Selecciona que servidor REST quieres utilizar entre ThingSpeak y Dweet
-//#define REST_SERVER_THINGSPEAK //Selecciona tu canal para ver los datos en la web (https://thingspeak.com/channels/360979)
-#define REST_SERVER_DWEET //Selecciona tu canal para ver los datos en la web (http://dweet.io/follow/PruebaGTI)
+#define REST_SERVER_THINGSPEAK //Selecciona tu canal para ver los datos en la web (https://thingspeak.com/channels/360979)
+//#define REST_SERVER_DWEET //Selecciona tu canal para ver los datos en la web (http://dweet.io/follow/PruebaGTI)
 
 ///////////////////////////////////////////////////////
 /////////////// WiFi Definitions /////////////////////
@@ -42,8 +43,8 @@ int y_values[] = { 3, 3, 3, 6, 6, 6, 11, 11, 11, 18, 18, 18, 27, 27, 27 }; //Val
   const char WiFiSSID[] = "GTI1";
   const char WiFiPSK[] = "1PV.arduino.Toledo";
 #else //Conexion fuera de la UPV
-  const char WiFiSSID[] = "MySSID";
-  const char WiFiPSK[] = "MyPassWord";
+  const char WiFiSSID[] = "Telsinet_123456";
+  const char WiFiPSK[] = "1q2w3e4r@2018?+";
 #endif
 
 
@@ -77,7 +78,7 @@ WiFiClient client;
   String MyWriteAPIKey="cdiocurso2018g21"; // Escribe la clave de tu canal Dweet
 #endif
 
-#define NUM_FIELDS_TO_SEND 5 //Numero de medidas a enviar al servidor REST (Entre 1 y 8)
+#define NUM_FIELDS_TO_SEND 6 //Numero de medidas a enviar al servidor REST (Entre 1 y 8)
 
 /////////////////////////////////////////////////////
 /////////////// Pin Definitions ////////////////
@@ -213,7 +214,7 @@ void HTTPGet(String fieldData[], int numFields){
 //////////////////////////////////////////////////////
 
 int sensor_humedad(){
-  adc0 = ads1115.readADC_SingleEnded(0);
+  adc2 = ads1115.readADC_SingleEnded(2);
   int humedad = 100*AirValue/(AirValue-WaterValue)-adc0*100/(AirValue-WaterValue);
  
   Serial.print("Porcentaje de humedad: ");
@@ -228,8 +229,8 @@ int sensor_humedad(){
 }
 
 int sensor_temp(){
-  adc2 = ads1115.readADC_SingleEnded(1);
-  int tem = map(adc2, 6700, 10320, 20, 37);
+  adc1 = ads1115.readADC_SingleEnded(1);
+  int tem = map(adc1, 6700, 10320, 20, 37);
   Serial.print("Temperatura: ");
   Serial.print(tem);
   Serial.println(" grados");
@@ -242,7 +243,7 @@ int sensor_temp(){
 }
 
 int sensor_luz(){
-  adc3 = ads1115.readADC_SingleEnded(2);
+  adc3 = ads1115.readADC_SingleEnded(3);
   Serial.println("Iluminacion.");
   Serial.println("");
   Serial.print("Intensa iluminacion: ");
@@ -265,45 +266,16 @@ int sensor_luz(){
   return alto+bajo;
 }
 
-// Function to compute the Lagrange polynomial for a given set of data points
-// and a specific value of x
-double lagrange_polynomial(const int* x_values,const int* y_values,int n,int x){
-  double result = 0;
-
-  // Compute the Lagrange polynomial using the formula:
-  // L(x) = sum(y[i] * l[i](x))
-  // where l[i](x) is the ith Lagrange basis polynomial
-  for (int i = 0; i < n; i++)
-  {
-    double l = 1;
-
-    // Compute the ith Lagrange basis polynomial
-    for (int j = 0; j < n; j++)
-    {
-        if (j != i)
-        {
-            l *= (x - x_values[j]) / (x_values[i] - x_values[j]);
-        }
-    }
-
-    result += y_values[i] * l;
-  }
-
-  return result;
-}
-
 int sensor_salinidad(){
-  int n = 5;
-  adc1 = analogRead(A0);  
-  int x = adc1;
+  int x = digitalRead(0);
   digitalWrite(power_pin, HIGH);
-  int sal = lagrange_polynomial(x_values, y_values, n, x);
+  int sal = 100*WaterSal*(WaterSal-ConSal)-x*100/(WaterSal-ConSal);
   delay(100);
   digitalWrite(power_pin, LOW);
   delay(100);
   Serial.print("Salinidad: ");
-  Serial.print(sal, DEC);
-  Serial.println(" g/L");
+  Serial.print(x, DEC);
+  Serial.println(" g");
   Serial.println("");
   Serial.println("---------------------------------");
   Serial.println("");
@@ -311,9 +283,21 @@ int sensor_salinidad(){
   return sal;
 }
 
+int sensor_ph(){
+  adc0 = ads1115.readADC_SingleEnded(0);
+  float in_min = 15500, in_max = 13500, out_min = 6, out_max = 7.2;
+  float ph = (adc0 - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+  Serial.print("PH: ");
+  Serial.print(ph);
+  Serial.println("");
+  Serial.println("---------------------------------");
+  Serial.println("");
+  return ph;
+}
+
 ////////////////////////////////////////////////////
 ////////////// Cálculo de prosperidad  //////////////
-//////////////////////////////////////////////////////
+/////////////////////////////////////////////////////
 
 int condiciones(){
   int humedad_maíz = 66;
@@ -321,7 +305,7 @@ int condiciones(){
   int temperatura_maíz = 31;
   int salinidad_maíz = 4;
   int ph_maíz = 6;
-  int condiciones = (abs(humedad_maíz-sensor_humedad())+abs(iluminación_maíz-sensor_luz())+abs(temperatura_maíz-sensor_temp())+abs(salinidad_maíz-sensor_salinidad())); //Luego se añadirá el ph
+  int condiciones = (abs(humedad_maíz-sensor_humedad())+abs(iluminación_maíz-sensor_luz())+abs(temperatura_maíz-sensor_temp())+abs(salinidad_maíz-sensor_salinidad())+abs(ph_maíz-sensor_ph()));
   int prosperidad = 2500/condiciones;
   if (condiciones < 50){
     prosperidad = -condiciones + 100;
@@ -375,6 +359,7 @@ void loop() {
   sensor_salinidad();
   sensor_temp();
   sensor_luz();
+  sensor_ph();
   condiciones(); 
     
   data[ 1 ] = String( sensor_humedad() ); //Escribimos el dato 1. Recuerda actualizar numFields
@@ -389,22 +374,28 @@ void loop() {
       Serial.println( data[ 2 ] );
   #endif
 
-  data[ 3 ] = String( sensor_temp() ); //Escribimos el dato 2. Recuerda actualizar numFields
+  data[ 3 ] = String( sensor_temp() ); //Escribimos el dato 3. Recuerda actualizar numFields
   #ifdef PRINT_DEBUG_MESSAGES
       Serial.print( "Temperatura = " );
       Serial.println( data[ 3 ] );
   #endif
 
-  data[ 4 ] = String( sensor_luz() ); //Escribimos el dato 2. Recuerda actualizar numFields
+  data[ 4 ] = String( sensor_luz() ); //Escribimos el dato 4. Recuerda actualizar numFields
   #ifdef PRINT_DEBUG_MESSAGES
       Serial.print( "Luminosidad = " );
       Serial.println( data[ 4 ] );
   #endif
-
-  data[ 5 ] = String( condiciones() ); //Escribimos el dato 2. Recuerda actualizar numFields
+  
+  data[ 5 ] = String( sensor_ph() ); //Escribimos el dato 5. Recuerda actualizar numFields
+  #ifdef PRINT_DEBUG_MESSAGES
+      Serial.print( "PH = " );
+      Serial.println( data[ 5 ] );
+  #endif
+  
+  data[ 6 ] = String( condiciones() ); //Escribimos el dato 6. Recuerda actualizar numFields
   #ifdef PRINT_DEBUG_MESSAGES
       Serial.print( "Prosperidad = " );
-      Serial.println( data[ 5 ] );
+      Serial.println( data[ 6 ] );
   #endif
 
   //Selecciona si quieres enviar con GET(ThingSpeak o Dweet) o con POST(ThingSpeak)
