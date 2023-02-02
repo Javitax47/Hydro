@@ -1,14 +1,12 @@
 #include <Adafruit_ADS1X15.h>
-
 #include <ESP8266WiFi.h>
 #include <cmath>
+#include <Wire.h>
 
 ///////////////////////////////////////////////////////
 ////////////// Definiciones de Sensores //////////////
 //////////////////////////////////////////////////////
 
-#include <Wire.h>
-#include <Adafruit_ADS1X15.h>
 Adafruit_ADS1115 ads1115; // construct an ads1115 at address 0x48
 #define power_pin 0 //pin para alimentar el sensor de salinidad
 #define channelValue 0
@@ -18,11 +16,169 @@ int16_t adc1;
 int16_t adc2;
 int16_t adc3;
 int16_t averageSample;
-const int AirValue =30304;  // Medimos valor en seco
-const int WaterValue =15300;  // Medimos valor en agua
-const int WaterSal =10110;  // Medimos valor en seco
-const int ConSal =20160;
- 
+
+
+///////////////////////////////////////////////////////
+///////////////////// Clases /////////////////////////
+//////////////////////////////////////////////////////
+
+class SensorHumedad {
+  private:
+    int adc2;
+    const int AirValue = 30;  // Medimos valor en seco
+    const int WaterValue = 90;  // Medimos valor en agua
+  public:
+    int leerHumedad() {
+      adc2 = ads1115.readADC_SingleEnded(2);
+      int humedad = map(adc2, AirValue, WaterValue, 0, 100);
+      if (humedad < 0){
+        humedad = 0;
+      }
+      if (humedad > 100){
+        humedad = 100;
+      }
+      Serial.print("Porcentaje de humedad: ");
+      Serial.print(humedad);
+      Serial.println("%");
+      Serial.println("");
+      Serial.println("---------------------------------");
+      Serial.println("");
+      delay(100);
+
+      return humedad;
+    }
+};
+
+class SensorTemperatura {
+  private:
+    int adc1;
+    const int MinValue = 6700;
+    const int MaxValue = 10320;
+  public:
+    int leerTemperatura() {
+      adc1 = ads1115.readADC_SingleEnded(1);
+      int tem = map(adc1, MinValue, MaxValue, 20, 37);
+      Serial.print("Temperatura: ");
+      Serial.print(tem);
+      Serial.println(" grados");
+      Serial.println("");
+      Serial.println("---------------------------------");
+      Serial.println("");
+      delay(100);
+
+      return tem;
+    }
+};
+
+class SensorLuz {
+  private:
+    int adc3;
+    const int MinIntenso = 11;
+    const int MaxIntenso = 30000;
+    const int MinDebil = 8;
+    const int MaxDebil = 100;
+  public:
+    int leerLuz() {
+      adc3 = ads1115.readADC_SingleEnded(3);
+      Serial.println("Iluminacion.");
+      Serial.println("");
+      Serial.print("Intensa iluminacion: ");
+      int alto = map(adc3, MinIntenso, MaxIntenso, 0, 100);
+      Serial.print(alto);
+      Serial.println(" %");
+      Serial.println("");
+      Serial.print("Debil iluminacion: ");
+      if(adc3 > MaxDebil){
+        adc3 = MaxDebil;
+      }
+      int bajo = map(adc3, MinDebil, MaxDebil, 0, 100);
+      Serial.print(bajo);
+      Serial.println(" %");
+      Serial.println("");
+      Serial.println("---------------------------------");
+      Serial.println("");
+      delay(100);
+
+      return alto + bajo;
+    }
+};
+
+class SensorSalinidad {
+  private:
+    const int pinAnalog = A0;
+    const int pinDigital = 0;
+    const int MinSal = 304;
+    const int MaxSal = 904;
+  public:
+    int leerSalinidad() {
+      digitalWrite(pinDigital, HIGH);
+      delay(100);
+      double x = analogRead(pinAnalog);
+      digitalWrite(pinDigital, LOW);
+      delay(100);
+      Serial.print(x, DEC);
+      Serial.println(" g");
+      Serial.println("");
+      double sal = map(x, MinSal, MaxSal, 0, 5);
+      Serial.print("Salinidad: ");
+      Serial.print(sal, DEC);
+      Serial.println(" g");
+      Serial.println("");
+      Serial.println("---------------------------------");
+      Serial.println("");
+
+      return sal;
+    }
+};
+
+class SensorPH{
+  private:
+    int adc0;
+
+  public:
+    float leerph(){
+      adc0 = ads1115.readADC_SingleEnded(0);
+      float in_min = 3830, in_max = 13625, out_min = 4, out_max = 7.63;
+      float ph = (adc0 - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+      Serial.print("PH: ");
+      Serial.print(ph);
+      Serial.println("");
+      Serial.println("---------------------------------");
+      Serial.println("");
+      return ph;
+    }
+};
+
+class Condiciones {
+  private:
+    int humedad_maíz = 66;
+    int iluminación_maíz = 80;
+    int temperatura_maíz = 31;
+    int salinidad_maíz = 4;
+    int ph_maíz = 6;
+  public:
+    int calcularProsperidad(int n1, int n2, int n3, int n4, int n5) {
+      int condiciones = (abs(humedad_maíz - n1) + abs(iluminación_maíz - n2) + abs(temperatura_maíz - n3) + abs(salinidad_maíz - n4) + abs(ph_maíz - n5));
+      int prosperidad = 2500 / condiciones;
+      if (condiciones < 50) {
+        prosperidad = -condiciones + 100;
+      }
+      return prosperidad;
+    }
+
+    void mostrarProsperidad(int n1, int n2, int n3, int n4, int n5) {
+      int prosperidad = calcularProsperidad(n1, n2, n3, n4, n5);
+      Serial.println("Porcentaje de optimizacion para una cosecha de MAIZ.");
+      Serial.println("Este porcentaje recoge la informacion del ambiente en el que se encuentra la planta y refleja que tan bueno es.");
+      Serial.print("Prosperidad: ");
+      Serial.print(prosperidad);
+      Serial.println("%");
+      Serial.println("");
+      Serial.println("---------------------------------");
+      Serial.println("");
+    }
+};
+
 
 // Comentar/Descomentar para ver mensajes de depuracion en monitor serie y/o respuesta del HTTP server
 //#define PRINT_DEBUG_MESSAGES
@@ -43,8 +199,8 @@ const int ConSal =20160;
   const char WiFiSSID[] = "GTI1";
   const char WiFiPSK[] = "1PV.arduino.Toledo";
 #else //Conexion fuera de la UPV
-  const char WiFiSSID[] = "n/a";
-  const char WiFiPSK[] = "n/a";
+  const char WiFiSSID[] = "";
+  const char WiFiPSK[] = "";
 #endif
 
 
@@ -213,114 +369,41 @@ void HTTPGet(String fieldData[], int numFields){
 /////////////// Sensores  ////////////////
 //////////////////////////////////////////////////////
 
-int sensor_humedad(){
-  adc2 = ads1115.readADC_SingleEnded(2);
-  int humedad = 100*AirValue/(AirValue-WaterValue)-adc0*100/(AirValue-WaterValue);
- 
-  Serial.print("Porcentaje de humedad: ");
-  Serial.print(humedad);
-  Serial.println("%");
-  Serial.println("");
-  Serial.println("---------------------------------");
-  Serial.println("");
-  delay(100);
-
-  return humedad;
+int sensor_humedad() {
+  SensorHumedad humedadSensor;
+  return humedadSensor.leerHumedad();
 }
 
-int sensor_temp(){
-  adc1 = ads1115.readADC_SingleEnded(1);
-  int tem = map(adc1, 6700, 10320, 20, 37);
-  Serial.print("Temperatura: ");
-  Serial.print(tem);
-  Serial.println(" grados");
-  Serial.println("");
-  Serial.println("---------------------------------");
-  Serial.println("");
-  delay(100);
-
-  return tem;
+int sensor_temp() {
+  SensorTemperatura tempSensor;
+  return tempSensor.leerTemperatura();
 }
 
-int sensor_luz(){
-  adc3 = ads1115.readADC_SingleEnded(3);
-  Serial.println("Iluminacion.");
-  Serial.println("");
-  Serial.print("Intensa iluminacion: ");
-  int alto = map(adc3,11,30000,0,100);
-  Serial.print(alto);
-  Serial.println(" %");
-  Serial.println("");
-  Serial.print("Debil iluminacion: ");
-  if(adc3 > 100){
-    adc3 = 100;
-  }
-  int bajo = map(adc3,11,100,0,100);
-  Serial.print(bajo);
-  Serial.println(" %");
-  Serial.println("");
-  Serial.println("---------------------------------");
-  Serial.println("");
-  delay(100);
-
-  return alto+bajo;
+int sensor_luz() {
+  SensorLuz luzSensor;
+  return luzSensor.leerLuz();
 }
 
-int sensor_salinidad(){
-  int x = digitalRead(0);
-  digitalWrite(power_pin, HIGH);
-  int sal = 100*WaterSal*(WaterSal-ConSal)-x*100/(WaterSal-ConSal);
-  delay(100);
-  digitalWrite(power_pin, LOW);
-  delay(100);
-  Serial.print("Salinidad: ");
-  Serial.print(x, DEC);
-  Serial.println(" g");
-  Serial.println("");
-  Serial.println("---------------------------------");
-  Serial.println("");
-  
-  return sal;
+int sensor_salinidad() {
+  SensorSalinidad salinidadSensor;
+  return salinidadSensor.leerSalinidad();
 }
 
-int sensor_ph(){
-  adc0 = ads1115.readADC_SingleEnded(0);
-  float in_min = 15500, in_max = 13500, out_min = 6, out_max = 7.2;
-  float ph = (adc0 - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-  Serial.print("PH: ");
-  Serial.print(ph);
-  Serial.println("");
-  Serial.println("---------------------------------");
-  Serial.println("");
-  return ph;
+int sensor_ph() {
+  SensorPH phSensor;
+  return phSensor.leerph();
 }
 
 ////////////////////////////////////////////////////
 ////////////// Cálculo de prosperidad  //////////////
 /////////////////////////////////////////////////////
 
-int condiciones(){
-  int humedad_maíz = 66;
-  int iluminación_maíz = 80;
-  int temperatura_maíz = 31;
-  int salinidad_maíz = 4;
-  int ph_maíz = 6;
-  int condiciones = (abs(humedad_maíz-sensor_humedad())+abs(iluminación_maíz-sensor_luz())+abs(temperatura_maíz-sensor_temp())+abs(salinidad_maíz-sensor_salinidad())+abs(ph_maíz-sensor_ph()));
-  int prosperidad = 2500/condiciones;
-  if (condiciones < 50){
-    prosperidad = -condiciones + 100;
-  }
-  Serial.println("Porcentaje de optimizacion para una cosecha de MAIZ.");
-  Serial.println("Este porcentaje recoge la informacion del ambiente en el que se encuentra la planta y refleja que tan bueno es.");
-  Serial.print("Prosperidad: ");
-  Serial.print(prosperidad);
-  Serial.println("%");
-  Serial.println("");
-  Serial.println("---------------------------------");
-  Serial.println("");
-
-  return prosperidad;
+int condiciones(int n1, int n2, int n3, int n4, int n5) {
+  Condiciones cond;
+  cond.mostrarProsperidad(n1, n2, n3, n4, n5);
+  return cond.calcularProsperidad(n1, n2, n3, n4, n5);
 }
+
 
 void setup() {
 
@@ -355,44 +438,44 @@ void loop() {
   
   String data[ NUM_FIELDS_TO_SEND + 1];  // Podemos enviar hasta 8 datos
 
-  sensor_humedad();
-  sensor_salinidad();
-  sensor_temp();
-  sensor_luz();
-  sensor_ph();
-  condiciones(); 
+  int n1 = sensor_humedad();
+  int n2 = sensor_salinidad();
+  int n3 = sensor_temp();
+  int n4 = sensor_luz();
+  int n5 = sensor_ph();
+  int n6 = condiciones(n1, n2, n3, n4, n5); 
     
-  data[ 1 ] = String( sensor_humedad() ); //Escribimos el dato 1. Recuerda actualizar numFields
+  data[ 1 ] = String( n1 ); //Escribimos el dato 1. Recuerda actualizar numFields
   #ifdef PRINT_DEBUG_MESSAGES
       Serial.print( "Humedad = " );
       Serial.println( data[ 1 ] );
   #endif
 
-  data[ 2 ] = String( sensor_salinidad() ); //Escribimos el dato 2. Recuerda actualizar numFields
+  data[ 2 ] = String( n2 ); //Escribimos el dato 2. Recuerda actualizar numFields
   #ifdef PRINT_DEBUG_MESSAGES
       Serial.print( "Salinidad = " );
       Serial.println( data[ 2 ] );
   #endif
 
-  data[ 3 ] = String( sensor_temp() ); //Escribimos el dato 3. Recuerda actualizar numFields
+  data[ 3 ] = String( n3 ); //Escribimos el dato 3. Recuerda actualizar numFields
   #ifdef PRINT_DEBUG_MESSAGES
       Serial.print( "Temperatura = " );
       Serial.println( data[ 3 ] );
   #endif
 
-  data[ 4 ] = String( sensor_luz() ); //Escribimos el dato 4. Recuerda actualizar numFields
+  data[ 4 ] = String( n4 ); //Escribimos el dato 4. Recuerda actualizar numFields
   #ifdef PRINT_DEBUG_MESSAGES
       Serial.print( "Luminosidad = " );
       Serial.println( data[ 4 ] );
   #endif
   
-  data[ 5 ] = String( sensor_ph() ); //Escribimos el dato 5. Recuerda actualizar numFields
+  data[ 5 ] = String( n5 ); //Escribimos el dato 5. Recuerda actualizar numFields
   #ifdef PRINT_DEBUG_MESSAGES
       Serial.print( "PH = " );
       Serial.println( data[ 5 ] );
   #endif
   
-  data[ 6 ] = String( condiciones() ); //Escribimos el dato 6. Recuerda actualizar numFields
+  data[ 6 ] = String( n6 ); //Escribimos el dato 6. Recuerda actualizar numFields
   #ifdef PRINT_DEBUG_MESSAGES
       Serial.print( "Prosperidad = " );
       Serial.println( data[ 6 ] );
@@ -405,6 +488,6 @@ void loop() {
   //Selecciona si quieres un retardo de 15seg para hacer pruebas o dormir el SparkFun
   delay( 5000 );   
   //Serial.print( "Goodnight" );
-  //ESP.deepSleep( sleepTimeSeconds * 1000000 );
+  //ESP.deepSleep( 3 * 86400000 ); //3 días
    
 }
